@@ -17,6 +17,7 @@ ExecStart=/usr/bin/podman run --rm \
   --name ${VK_CONTAINER_NAME} \
   -p 127.0.0.1:${PORT}:${PORT} \
   -e PORT \
+  -e BACKEND_PORT \
   -e HOST \
   -e NODE_ENV \
   -e HOME \
