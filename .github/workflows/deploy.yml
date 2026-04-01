@@ -30,23 +30,19 @@ jobs:
           echo "instance=$INSTANCE" >> $GITHUB_OUTPUT
           echo "version=$VERSION"   >> $GITHUB_OUTPUT
 
-      - name: Copy repo files to host
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host:     ${{ secrets.SANDBOXES_TS_HOST }}
-          username: deploy
-          key:      ${{ secrets.DEPLOY_SSH_KEY }}
-          source:   "Containerfile,deploy.sh,VERSION"
-          target:   /srv/vibe-kanban/${{ steps.vars.outputs.instance }}
+      - name: Copy repo files and deploy
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
+          HOST="deploy@${{ secrets.SANDBOXES_TS_HOST }}"
+          INSTANCE="${{ steps.vars.outputs.instance }}"
+          TARGET="/srv/vibe-kanban/${INSTANCE}"
 
-      - name: Deploy
-        uses: appleboy/ssh-action@v1
-        with:
-          host:     ${{ secrets.SANDBOXES_TS_HOST }}
-          username: deploy
-          key:      ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            bash /srv/vibe-kanban/${{ steps.vars.outputs.instance }}/deploy.sh \
-              "${{ steps.vars.outputs.instance }}" \
-              "${{ steps.vars.outputs.version }}" \
-              "${{ secrets.TS_FQDN }}"
+          ssh $SSH_OPTS "$HOST" "mkdir -p ${TARGET}"
+          scp $SSH_OPTS Containerfile deploy.sh VERSION "$HOST:${TARGET}/"
+          ssh $SSH_OPTS "$HOST" \
+            "bash ${TARGET}/deploy.sh ${INSTANCE} ${{ steps.vars.outputs.version }} ${{ secrets.TS_FQDN }}"
+
+          rm -f ~/.ssh/deploy_key
