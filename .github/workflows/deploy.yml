@@ -41,7 +41,7 @@ jobs:
           TARGET="/srv/vibe-kanban/${INSTANCE}"
 
           ssh $SSH_OPTS "$HOST" "mkdir -p ${TARGET}"
-          scp $SSH_OPTS Containerfile deploy.sh VERSION "$HOST:${TARGET}/"
+          scp -r $SSH_OPTS ./* "$HOST:${TARGET}/"
           ssh $SSH_OPTS "$HOST" \
             "bash ${TARGET}/deploy.sh ${INSTANCE} ${{ steps.vars.outputs.version }} ${{ secrets.TS_FQDN }}"
 
