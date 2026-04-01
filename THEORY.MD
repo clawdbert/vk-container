@@ -2,32 +2,33 @@
 
 ## Problem
 
-Vibe-Kanban is a Kanban board application distributed as an npm package. It needs a reliable, repeatable deployment mechanism that supports multiple instances (dev and prod) on the same host, with secure remote access and CI/CD automation. The challenge is not the application itself but the orchestration: getting the right version running in the right environment with correct networking, persistence, and service management — and doing so identically every time, triggered by a git push.
+Vibe-Kanban is a Kanban board application distributed as an npm package. It needs a reliable, repeatable deployment mechanism that supports three concurrent instances (project, dev, prod) on the same host, each at potentially different versions, with secure remote access and CI/CD automation. The repo must be the sole source of truth for all deployment artifacts — nothing should be assumed to exist on the host already.
 
 ## Operating Theory
 
-This repo is pure infrastructure-as-code. It contains no application logic — the app is pulled at runtime via `npx --yes vibe-kanban@${VK_VERSION}`. The deployment model is:
+This repo contains no application code. The app is the `vibe-kanban` npm package, pulled at container startup via `npx --yes vibe-kanban@${VK_VERSION}`. This repo is strictly deployment plumbing: a Containerfile, a deploy script, a systemd unit template, and a CI workflow.
 
-1. **Podman containers** (not Docker) run as user-level services, avoiding root and the Docker daemon.
-2. **Systemd user services** manage container lifecycle — start, stop, restart, enable on boot.
-3. **Named Podman volumes** persist application state across container restarts (share, home, config).
-4. **Instance isolation** via naming conventions: `vk-dev-*` vs `vk-prod-*` volumes, separate ports (dev: 3928/3931, prod: 3929/3932), separate service units.
-5. **Tailscale** provides secure network access — the containers bind to localhost, and Tailscale handles external routing.
-6. **GitHub Actions** ties it together: push to `dev` branch deploys dev instance, push to `main` deploys prod. The workflow SSHs into the target host and runs `deploy.sh`.
+Each instance has a **runtime directory** that contains everything needed to run that instance at that version:
 
-The `deploy.sh` script is the single source of truth for deployment logic — it creates directories, builds the container image if needed, generates environment config, installs the systemd unit, and starts the service.
+- **project** → `/home/deploy/projects/vk-container/` (this repo checkout, run manually)
+- **dev** → `/srv/vibe-kanban/dev/` (populated by CI from the `dev` branch)
+- **prod** → `/srv/vibe-kanban/prod/` (populated by CI from the `main` branch)
+
+CI copies `Containerfile`, `deploy.sh`, and `VERSION` into the runtime directory, then runs `deploy.sh` from there. This ensures each instance is self-contained and version-isolated — dev can be running different deployment logic than prod.
+
+All three instances have completely separate Podman named volumes (`vk-<instance>-share`, `vk-<instance>-home`, `vk-<instance>-config`). No data is shared between instances.
 
 ## Strategy
 
-The approach is minimal and direct: one script, one service file, one container definition, one CI workflow. No Terraform, no Kubernetes, no Ansible — just shell scripting and systemd on a single host. This is appropriate for the scale (two instances on one machine) and keeps the operational surface small.
+Minimal tooling, maximum clarity. One shell script handles everything: volume creation, image build, env generation, systemd unit installation, service restart. No orchestration frameworks — just Podman, systemd, and SSH. The CI workflow's only job is to get the right files to the right place and run the script.
 
-The version is tracked in a `VERSION` file at the repo root, which the CI workflow reads to determine what to deploy. This decouples "deploy the infrastructure" from "upgrade the app version" — both happen via the same git-push mechanism but are independently controllable.
+The version is tracked in a `VERSION` file. Bumping the version and pushing triggers a full redeploy: CI copies the new VERSION to the runtime directory, deploy.sh generates a new .env with that version, and the systemd restart pulls the new npm package version at container startup.
 
 ## Key Discoveries
 
-The repo evolved from an initial `install.sh` + `vibe-kanban.service` approach to the current `deploy.sh` + `vk-project.service` model in the "first attempt" commit. This refactor introduced GitHub Actions CI/CD and multi-instance support, suggesting the original single-instance manual-deploy approach was insufficient once dev/prod separation became necessary.
+The original workflow assumed `deploy.sh` already existed on the host at `/srv/vibe-kanban/deploy.sh` — it checked out the repo on the GitHub Actions runner but never copied anything to the target host. This meant changes to deploy.sh, Containerfile, or VERSION in git had no effect on deployments. The fix was adding an SCP step to copy deployment files into the instance's runtime directory before running deploy.sh, making the repo the actual source of truth rather than whatever was manually placed on the host at some earlier point.
 
 ## Open Questions
 
-- Whether the container image rebuild strategy (build only if missing) handles version upgrades correctly, or whether stale images could cause deployment issues.
-- How rollbacks work — there's no apparent mechanism to revert to a previous version beyond changing the VERSION file and redeploying.
+- Whether the container image rebuild strategy (build only if missing) handles upgrades correctly, or whether stale images could cause issues.
+- How rollbacks work — currently requires changing VERSION and redeploying. No mechanism to keep previous versions available for quick revert.

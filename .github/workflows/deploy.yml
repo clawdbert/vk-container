@@ -30,14 +30,23 @@ jobs:
           echo "instance=$INSTANCE" >> $GITHUB_OUTPUT
           echo "version=$VERSION"   >> $GITHUB_OUTPUT
 
-      - name: Deploy to sandboxes1
+      - name: Copy repo files to host
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host:     ${{ secrets.SANDBOXES_TS_HOST }}
+          username: deploy
+          key:      ${{ secrets.DEPLOY_SSH_KEY }}
+          source:   "Containerfile,deploy.sh,VERSION"
+          target:   /srv/vibe-kanban/${{ steps.vars.outputs.instance }}
+
+      - name: Deploy
         uses: appleboy/ssh-action@v1
         with:
           host:     ${{ secrets.SANDBOXES_TS_HOST }}
           username: deploy
           key:      ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
-            bash /srv/vibe-kanban/deploy.sh \
+            bash /srv/vibe-kanban/${{ steps.vars.outputs.instance }}/deploy.sh \
               "${{ steps.vars.outputs.instance }}" \
               "${{ steps.vars.outputs.version }}" \
               "${{ secrets.TS_FQDN }}"
