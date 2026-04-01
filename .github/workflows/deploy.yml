@@ -21,7 +21,6 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret:    ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
           tags:            tag:ci
-          ephemeral:       true
 
       - name: Resolve instance and version
         id: vars
@@ -31,7 +30,7 @@ jobs:
           echo "instance=$INSTANCE" >> $GITHUB_OUTPUT
           echo "version=$VERSION"   >> $GITHUB_OUTPUT
 
-      - name: Deploy to antfarm2
+      - name: Deploy to sandboxes1
         uses: appleboy/ssh-action@v1
         with:
           host:     ${{ secrets.SANDBOXES_TS_HOST }}
