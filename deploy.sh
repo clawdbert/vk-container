@@ -33,15 +33,13 @@ for vol in "vk-${INSTANCE}-share" "vk-${INSTANCE}-home" "vk-${INSTANCE}-config";
   podman volume inspect "$vol" &>/dev/null || podman volume create "$vol"
 done
 
-# ── 3. Build container image if not present ───────────────────────────────────
-if ! podman image exists localhost/vk-node:22-bookworm-slim; then
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  if [ -f "${SCRIPT_DIR}/Containerfile" ]; then
-    podman build -t vk-node:22-bookworm-slim "${SCRIPT_DIR}"
-  else
-    echo "ERROR: Container image localhost/vk-node:22-bookworm-slim not found and no Containerfile available"
-    exit 1
-  fi
+# ── 3. Build container image ──────────────────────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [ -f "${SCRIPT_DIR}/Containerfile" ]; then
+  podman build -t vk-node:22-bookworm-slim "${SCRIPT_DIR}"
+else
+  echo "ERROR: No Containerfile available at ${SCRIPT_DIR}"
+  exit 1
 fi
 
 # ── 4. Write .env ─────────────────────────────────────────────────────────────
@@ -81,6 +79,7 @@ ExecStart=/usr/bin/podman run --rm \\
   --name \${VK_CONTAINER_NAME} \\
   -p 127.0.0.1:\${PORT}:\${PORT} \\
   -e PORT \\
+  -e BACKEND_PORT \\
   -e HOST \\
   -e NODE_ENV \\
   -e HOME \\

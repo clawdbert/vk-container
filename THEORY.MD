@@ -30,5 +30,4 @@ The original workflow assumed `deploy.sh` already existed on the host at `/srv/v
 
 ## Open Questions
 
-- Whether the container image rebuild strategy (build only if missing) handles upgrades correctly, or whether stale images could cause issues.
-- How rollbacks work — currently requires changing VERSION and redeploying. No mechanism to keep previous versions available for quick revert.
+- How rollbacks work — there's no apparent mechanism to revert to a previous version beyond changing the VERSION file and redeploying.
