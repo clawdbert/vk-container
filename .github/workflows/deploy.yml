@@ -1,0 +1,48 @@
+name: Deploy vibe-kanban
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+
+jobs:
+  deploy:
+    name: Deploy → ${{ github.ref_name == 'main' && 'prod' || 'dev' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Join tailnet
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_CLIENT_SECRET }}
+          tags:            tag:ci
+
+      - name: Resolve instance and version
+        id: vars
+        run: |
+          INSTANCE=$([[ "${{ github.ref_name }}" == "main" ]] && echo prod || echo dev)
+          VERSION=$(cat VERSION 2>/dev/null || npm view vibe-kanban version)
+          echo "instance=$INSTANCE" >> $GITHUB_OUTPUT
+          echo "version=$VERSION"   >> $GITHUB_OUTPUT
+
+      - name: Copy repo files and deploy
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          SSH_OPTS="-o StrictHostKeyChecking=no -i ~/.ssh/deploy_key"
+          HOST="deploy@${{ secrets.SANDBOXES_TS_HOST }}"
+          INSTANCE="${{ steps.vars.outputs.instance }}"
+          TARGET="/srv/vibe-kanban/${INSTANCE}"
+
+          ssh $SSH_OPTS "$HOST" "mkdir -p ${TARGET}"
+          scp -r $SSH_OPTS ./* "$HOST:${TARGET}/"
+          ssh $SSH_OPTS "$HOST" \
+            "bash ${TARGET}/deploy.sh ${INSTANCE} ${{ steps.vars.outputs.version }} ${{ secrets.TS_FQDN }}"
+
+          rm -f ~/.ssh/deploy_key

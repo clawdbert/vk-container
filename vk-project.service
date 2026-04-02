@@ -1,5 +1,5 @@
 [Unit]
-Description=vibe-kanban (0.1.36) — Podman container
+Description=vibe-kanban (vk-project) — Podman container
 After=network-online.target
 Wants=network-online.target
 
@@ -12,25 +12,26 @@ StartLimitBurst=5
 
 EnvironmentFile=/home/deploy/projects/vk-container/.env
 
-ExecStartPre=-/usr/bin/podman rm -f vibe-kanban
+ExecStartPre=-/usr/bin/podman rm -f ${VK_CONTAINER_NAME}
 ExecStart=/usr/bin/podman run --rm \
-  --name vibe-kanban \
-  -p 127.0.0.1:3927:3927 \
+  --name ${VK_CONTAINER_NAME} \
+  -p 127.0.0.1:${PORT}:${PORT} \
   -e PORT \
+  -e BACKEND_PORT \
   -e HOST \
   -e NODE_ENV \
   -e HOME \
   -e VK_ALLOWED_ORIGINS \
-  -v vk-data-share:/home/deploy/.local/share/vibe-kanban:rw \
-  -v vk-data-home:/home/deploy/.vibe-kanban:rw \
-  -v vk-config:/home/deploy/.config/vibe-kanban:rw \
+  -v ${VK_SHARE_VOL}:/home/deploy/.local/share/vibe-kanban:rw \
+  -v ${VK_HOME_VOL}:/home/deploy/.vibe-kanban:rw \
+  -v ${VK_CONFIG_VOL}:/home/deploy/.config/vibe-kanban:rw \
   -v /var/tmp/vibe-kanban:/var/tmp/vibe-kanban:rw \
   -v /home/deploy/projects:/home/deploy/projects:rw \
   -v /home/deploy/.nvm:/home/deploy/.nvm:ro \
   --workdir /home/deploy \
   localhost/vk-node:22-bookworm-slim \
-  npx --yes vibe-kanban@0.1.36
-ExecStop=/usr/bin/podman stop vibe-kanban
+  npx --yes vibe-kanban@${VK_VERSION}
+ExecStop=/usr/bin/podman stop ${VK_CONTAINER_NAME}
 
 [Install]
 WantedBy=default.target
